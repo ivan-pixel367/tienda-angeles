@@ -12,8 +12,17 @@
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       body { margin: 0; background: #F7F5F2; }
     </style>
-  </head>
+<link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+<meta name="theme-color" content="#1a1a2e" />  
+</head>
   <body>
     <div id="root"></div>
-  </body>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/service-worker.js');
+    });
+  }
+</script>  
+</body>
 </html>
