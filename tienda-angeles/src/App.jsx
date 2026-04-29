@@ -3,12 +3,12 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, query, orderBy } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "REEMPLAZAR_API_KEY",
-  authDomain: "REEMPLAZAR_PROJECT_ID.firebaseapp.com",
-  projectId: "REEMPLAZAR_PROJECT_ID",
-  storageBucket: "REEMPLAZAR_PROJECT_ID.appspot.com",
-  messagingSenderId: "REEMPLAZAR_SENDER_ID",
-  appId: "REEMPLAZAR_APP_ID"
+  apiKey: "AIzaSyBynNS9k20lVkP-LBqK-Wh7h_p0rJQ2xiE",
+  authDomain: "tienda-angeles.firebaseapp.com",
+  projectId: "tienda-angeles",
+  storageBucket: "tienda-angeles.appspot.com",
+  messagingSenderId: "855025205449",
+  appId: "1:855025205449:web:ea9fd83137ba8afdec4d18"
 };
 
 const app = initializeApp(firebaseConfig);
