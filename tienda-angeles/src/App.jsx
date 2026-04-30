@@ -90,7 +90,7 @@ function ImagenVisor({ src, onClose }) {
 
 // ── App ─────────────────────────────────────────────────────────
 export default function App() {
-  const [rol, setRol] = useState(null);
+  const [rol, setRol] = useState(localStorage.getItem('tienda_rol') || null);
   const [pedirPassword, setPedirPassword] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [errorPassword, setErrorPassword] = useState(false);
@@ -221,13 +221,13 @@ export default function App() {
             <p style={{ color: "#a0b4cc", fontSize: 13, marginBottom: 22 }}>Ingresá la contraseña para continuar</p>
             <input type="password" placeholder="Contraseña" value={passwordInput}
               onChange={e => { setPasswordInput(e.target.value); setErrorPassword(false); }}
-              onKeyDown={e => { if (e.key === "Enter") { if (passwordInput === "comprastienda") { setPedirPassword(false); setPasswordInput(""); setRol(ROLES.COMPRAS); } else setErrorPassword(true); } }}
+              onKeyDown={e => { if (e.key === "Enter") { if (passwordInput === "comprastienda") { setPedirPassword(false); setPasswordInput(""); localStorage.setItem('tienda_rol', ROLES.COMPRAS); setRol(ROLES.COMPRAS); } else setErrorPassword(true); } }}
               style={{ width: "100%", padding: "13px 16px", borderRadius: 12, border: errorPassword ? "2px solid #FF4444" : "2px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.1)", color: "#fff", fontSize: 16, outline: "none", marginBottom: 8, fontFamily: "inherit", letterSpacing: 2 }}
               autoFocus />
             {errorPassword && <p style={{ color: "#FF6B6B", fontSize: 13, marginBottom: 12 }}>Contraseña incorrecta</p>}
             <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
               <button className="bh" onClick={() => { setPedirPassword(false); setPasswordInput(""); setErrorPassword(false); }} style={{ flex: 1, padding: "11px", borderRadius: 10, background: "rgba(255,255,255,0.1)", color: "#ccc", fontSize: 14, fontWeight: 600 }}>Volver</button>
-              <button className="bh" onClick={() => { if (passwordInput === "comprastienda") { setPedirPassword(false); setPasswordInput(""); setRol(ROLES.COMPRAS); } else setErrorPassword(true); }} style={{ flex: 1, padding: "11px", borderRadius: 10, background: "linear-gradient(135deg,#4a9eff,#2176d4)", color: "#fff", fontSize: 14, fontWeight: 700 }}>Ingresar</button>
+              <button className="bh" onClick={() => { if (passwordInput === "comprastienda") { setPedirPassword(false); setPasswordInput(""); localStorage.setItem('tienda_rol', ROLES.COMPRAS); setRol(ROLES.COMPRAS); } else setErrorPassword(true); }} style={{ flex: 1, padding: "11px", borderRadius: 10, background: "linear-gradient(135deg,#4a9eff,#2176d4)", color: "#fff", fontSize: 14, fontWeight: 700 }}>Ingresar</button>
             </div>
           </div>
         )}
@@ -252,7 +252,7 @@ export default function App() {
               <div style={{ color: "#a0b4cc", fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase" }}>{esCompras ? "Panel de Compras" : "Panel de Vendedor"}</div>
             </div>
           </div>
-          <button className="ba" onClick={() => setRol(null)} style={{ background: "rgba(255,255,255,.12)", color: "#fff", padding: "6px 14px", borderRadius: 8, fontSize: 13 }}>Salir</button>
+          <button className="ba" onClick={() => { localStorage.removeItem('tienda_rol'); setRol(null); }} style={{ background: "rgba(255,255,255,.12)", color: "#fff", padding: "6px 14px", borderRadius: 8, fontSize: 13 }}>Salir</button>
         </div>
       </div>
 
