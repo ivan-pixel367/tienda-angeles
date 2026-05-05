@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+im
+            {f.fotoEtiqueta && <img src={f.fotoEtiqueta} alt="Etiqueta" onClick={() => setImagenVista(f.fotoEtiqueta)} style={{ maxWidth: "100%", maxHeight: 120, borderRadius: 8, marginTop: 8, cursor: "zoom-in", border: "2px solid #e8c07d" }} />}port { useState, useEffect, useRef } from "react";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, query, orderBy } from "firebase/firestore";
 
@@ -52,6 +53,8 @@ export default function App() {
   const [notif, setNotif] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [form, setForm] = useState({
+  const fotoEtiquetaRef = React.useRef(null);
+  const [fotoEtiqueta, setFotoEtiqueta] = React.useState(null);
     producto: "", precio: "", descripcion: "", cantidad: "",
     urgencia: "media", vendedor: "", tieneSeña: false, comprobante: null, comprobanteNombre: "",
   });
@@ -83,12 +86,21 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
+  const handleFotoEtiqueta = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) { mostrarNotif("La imagen no puede superar 8MB", "err"); return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => setFotoEtiqueta(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
   const enviarFaltante = async () => {
     if (!form.producto || !form.vendedor || !form.cantidad) { mostrarNotif("Completá producto, vendedor y cantidad", "err"); return; }
     if (form.tieneSeña && !form.comprobante) { mostrarNotif("Adjuntá la foto de la factura para registrar la seña", "err"); return; }
     try {
       await addDoc(collection(db, "faltantes"), {
-        ...form,
+        ...form, fotoEtiqueta,
         fecha_reporte: new Date().toISOString().slice(0, 10),
         estado: "pendiente",
         fecha_llegada: null,
@@ -98,6 +110,7 @@ export default function App() {
       setForm({ producto: "", precio: "", descripcion: "", cantidad: "", urgencia: "media", vendedor: "", tieneSeña: false, comprobante: null, comprobanteNombre: "" });
       setVista("lista");
       mostrarNotif("¡Faltante reportado!");
+      setFotoEtiqueta(null);
     } catch (e) {
       mostrarNotif("Error al guardar. Revisá la conexión.", "err");
       console.error(e);
@@ -231,7 +244,15 @@ export default function App() {
                 <label style={{ fontSize: 13, color: "#555", fontWeight: 600, display: "block", marginBottom: 6 }}>Producto / Tela *</label>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input value={form.producto} onChange={e => setForm({ ...form, producto: e.target.value })} placeholder="Ej: Tela lino beige 150cm" {...inp()} style={{ ...inp().style, flex: 1 }} onFocus={inp().onFocus} onBlur={inp().onBlur} />
+                  <input ref={fotoEtiquetaRef} type="file" accept="image/*" capture="environment" onChange={handleFotoEtiqueta} style={{ display: "none" }} />
+                  <button type="button" onClick={() => fotoEtiquetaRef.current && fotoEtiquetaRef.current.click()} title="Sacar foto a la etiqueta" style={{ padding: "0 14px", borderRadius: 10, border: "2px solid #e8c07d", background: fotoEtiqueta ? "#e8c07d" : "#fff", cursor: "pointer", fontSize: 20, flexShrink: 0 }}>📷</button>
                 </div>
+                {fotoEtiqueta && (
+                  <div style={{ marginTop: 8, position: "relative", display: "inline-block" }}>
+                    <img src={fotoEtiqueta} alt="Etiqueta" style={{ maxWidth: "100%", maxHeight: 160, borderRadius: 8, border: "2px solid #e8c07d" }} />
+                    <button type="button" onClick={() => setFotoEtiqueta(null)} style={{ position: "absolute", top: 4, right: 4, background: "#cc0000", color: "#fff", border: "none", borderRadius: "50%", width: 22, height: 22, cursor: "pointer", fontSize: 13, lineHeight: "22px", textAlign: "center" }}>×</button>
+                  </div>
+                )}
               </div>
               {form.precio && <div style={{ background: "#F0FFF6", border: "1.5px solid #22AA66", borderRadius: 8, padding: "8px 14px", fontSize: 14, color: "#22AA66", fontWeight: 600 }}>💰 Precio del QR: {form.precio}</div>}
               <div>
