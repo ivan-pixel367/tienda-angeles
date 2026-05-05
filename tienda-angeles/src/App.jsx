@@ -354,7 +354,7 @@ export default function App() {
         {vista === "lista" && !cargando && (
           <>
             <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-              {[["todos","Todos"],["pendiente","Pendientes"],["en_proceso","En proceso"],["comprado","Comprado"],["recibido","Recibidos"]].map(([val, label]) => (
+              {[["todos","Todos"],["pendiente","Pendientes"],["en_proceso","En proceso"],["comprado","Comprado"],["recibido","Recibidos"],["sin_stock","No hay en stock"]].map(([val, label]) => (
                 <button key={val} className="ba" onClick={() => setFiltroEstado(val)} style={{ padding: "7px 14px", borderRadius: 20, fontSize: 13, fontWeight: 600, background: filtroEstado === val ? "#1a1a2e" : "#fff", color: filtroEstado === val ? "#fff" : "#666", boxShadow: "0 1px 6px rgba(0,0,0,.07)" }}>
                   {label}
                 </button>
