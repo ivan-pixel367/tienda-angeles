@@ -91,9 +91,6 @@ function ImagenVisor({ src, onClose }) {
 // ── App ─────────────────────────────────────────────────────────
 export default function App() {
   const [rol, setRol] = useState(localStorage.getItem('tienda_rol') || null);
-  const [pedirPassword, setPedirPassword] = useState(false);
-  const [passwordInput, setPasswordInput] = useState("");
-  const [errorPassword, setErrorPassword] = useState(false);
   const [faltantes, setFaltantes] = useState([]);
   const [vista, setVista] = useState("lista");
   const [filtroEstado, setFiltroEstado] = useState("todos");
@@ -202,35 +199,12 @@ export default function App() {
         <div style={{ width: 80, height: 80, borderRadius: "50%", background: "linear-gradient(135deg,#e8c07d,#c9943c)", margin: "0 auto 22px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36 }}>🧵</div>
         <h1 style={{ fontFamily: "'Playfair Display',serif", fontSize: 34, color: "#fff", fontWeight: 900, marginBottom: 6 }}>Tienda Los Ángeles</h1>
         <p style={{ color: "#a0b4cc", fontFamily: "'Source Sans 3',sans-serif", fontSize: 15, marginBottom: 48 }}>Sistema de gestión de faltantes</p>
-        {!pedirPassword ? (
-          <>
             <p style={{ color: "#c9d8e8", fontFamily: "'Source Sans 3',sans-serif", fontSize: 12, marginBottom: 20, letterSpacing: 2, textTransform: "uppercase" }}>¿Con qué perfil ingresás?</p>
             <div style={{ display: "flex", gap: 16, justifyContent: "center" }}>
               <button className="bh" onClick={() => setRol(ROLES.VENDEDOR)} style={{ padding: "20px 30px", background: "linear-gradient(135deg,#e8c07d,#c9943c)", borderRadius: 16, color: "#1a1a2e", fontFamily: "'Playfair Display',serif", fontSize: 18, fontWeight: 700, minWidth: 150 }}>
                 🛍️<br /><span style={{ fontSize: 14, fontFamily: "'Source Sans 3',sans-serif", fontWeight: 600 }}>Vendedor/a</span>
               </button>
-              <button className="bh" onClick={() => { setPedirPassword(true); setPasswordInput(""); setErrorPassword(false); }} style={{ padding: "20px 30px", background: "linear-gradient(135deg,#4a9eff,#2176d4)", borderRadius: 16, color: "#fff", fontFamily: "'Playfair Display',serif", fontSize: 18, fontWeight: 700, minWidth: 150 }}>
-                📦<br /><span style={{ fontSize: 14, fontFamily: "'Source Sans 3',sans-serif", fontWeight: 600 }}>Compras</span>
-              </button>
             </div>
-          </>
-        ) : (
-          <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: 20, padding: 28, maxWidth: 340, margin: "0 auto" }}>
-            <div style={{ fontSize: 36, marginBottom: 12 }}>🔒</div>
-            <p style={{ color: "#fff", fontFamily: "'Playfair Display',serif", fontSize: 20, fontWeight: 700, marginBottom: 6 }}>Panel de Compras</p>
-            <p style={{ color: "#a0b4cc", fontSize: 13, marginBottom: 22 }}>Ingresá la contraseña para continuar</p>
-            <input type="password" placeholder="Contraseña" value={passwordInput}
-              onChange={e => { setPasswordInput(e.target.value); setErrorPassword(false); }}
-              onKeyDown={e => { if (e.key === "Enter") { if (passwordInput === "comprastienda") { setPedirPassword(false); setPasswordInput(""); localStorage.setItem('tienda_rol', ROLES.COMPRAS); setRol(ROLES.COMPRAS); } else setErrorPassword(true); } }}
-              style={{ width: "100%", padding: "13px 16px", borderRadius: 12, border: errorPassword ? "2px solid #FF4444" : "2px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.1)", color: "#fff", fontSize: 16, outline: "none", marginBottom: 8, fontFamily: "inherit", letterSpacing: 2 }}
-              autoFocus />
-            {errorPassword && <p style={{ color: "#FF6B6B", fontSize: 13, marginBottom: 12 }}>Contraseña incorrecta</p>}
-            <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-              <button className="bh" onClick={() => { setPedirPassword(false); setPasswordInput(""); setErrorPassword(false); }} style={{ flex: 1, padding: "11px", borderRadius: 10, background: "rgba(255,255,255,0.1)", color: "#ccc", fontSize: 14, fontWeight: 600 }}>Volver</button>
-              <button className="bh" onClick={() => { if (passwordInput === "comprastienda") { setPedirPassword(false); setPasswordInput(""); localStorage.setItem('tienda_rol', ROLES.COMPRAS); setRol(ROLES.COMPRAS); } else setErrorPassword(true); }} style={{ flex: 1, padding: "11px", borderRadius: 10, background: "linear-gradient(135deg,#4a9eff,#2176d4)", color: "#fff", fontSize: 14, fontWeight: 700 }}>Ingresar</button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
