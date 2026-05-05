@@ -204,6 +204,9 @@ export default function App() {
               <button className="bh" onClick={() => setRol(ROLES.VENDEDOR)} style={{ padding: "20px 30px", background: "linear-gradient(135deg,#e8c07d,#c9943c)", borderRadius: 16, color: "#1a1a2e", fontFamily: "'Playfair Display',serif", fontSize: 18, fontWeight: 700, minWidth: 150 }}>
                 🛍️<br /><span style={{ fontSize: 14, fontFamily: "'Source Sans 3',sans-serif", fontWeight: 600 }}>Vendedor/a</span>
               </button>
+              <button className="bh" onClick={() => { localStore.setItem('tienda_rol', ROLES.COMPRAS); setRol(ROLES.COMPRAS); }} style={{ padding: "20px 30px", background: "linear-gradient(135deg,#7ec8e3,#3a8fb5)", borderRadius: 16, color: "#1a1a2e", fontFamily: "'Playfair Display',serif", fontSize: 18, fontWeight: 700, minWidth: 150 }}>
+                📦<br /><span style={{ fontSize: 14, fontFamily: "'Source Sans 3',sans-serif", fontWeight: 600 }}>Compras</span>
+              </button>
             </div>
       </div>
     </div>
