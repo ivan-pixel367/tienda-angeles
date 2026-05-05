@@ -27,6 +27,8 @@ const ESTADO_CONFIG = {
   en_proceso: { label: "En proceso", color: "#1A6FD4", bg: "#EDF4FF" },
   comprado: { label: "Comprado", color: "#22AA66", bg: "#F0FFF6" },
   recibido: { label: "Recibido ✓", color: "#22AA66", bg: "#E0FFE8" },
+
+  sin_stock: { label: "No hay en stock", color: "#CC0000", bg: "#FFE5E5" },
 };
 
 // ── QR Scanner ────────────────────────────────────────────────
@@ -412,6 +414,8 @@ export default function App() {
                           <option value="en_proceso">🔄 En proceso</option>
                           <option value="comprado">✅ Comprado</option>
                           <option value="recibido">📬 Recibido</option>
+                        
+                          <option value="sin_stock">❌ No hay en stock</option>
                         </select>
                       </div>
                       <div>
