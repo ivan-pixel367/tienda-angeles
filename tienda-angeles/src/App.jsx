@@ -31,55 +31,6 @@ const ESTADO_CONFIG = {
   sin_stock: { label: "No hay en stock", color: "#CC0000", bg: "#FFE5E5" },
 };
 
-// ── QR Scanner ────────────────────────────────────────────────
-function QRScanner({ onScan, onClose }) {
-  const videoRef = useRef(null);
-  const streamRef = useRef(null);
-  const [error, setError] = useState(null);
-  const [scanning, setScanning] = useState(false);
-  useEffect(() => {
-    let interval;
-    const start = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-          setScanning(true);
-          if ("BarcodeDetector" in window) {
-            const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
-            interval = setInterval(async () => {
-              if (videoRef.current?.readyState === 4) {
-                try {
-                  const codes = await detector.detect(videoRef.current);
-                  if (codes.length > 0) { clearInterval(interval); onScan(codes[0].rawValue); }
-                } catch {}
-              }
-            }, 400);
-          } else { setError("Tu navegador no soporta escaneo nativo. Ingresá el producto manualmente."); }
-        }
-      } catch { setError("No se pudo acceder a la cámara. Verificá los permisos del navegador."); }
-    };
-    start();
-    return () => { clearInterval(interval); streamRef.current?.getTracks().forEach(t => t.stop()); };
-  }, []);
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.93)", zIndex: 1000, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ color: "#e8c07d", fontFamily: "sans-serif", marginBottom: 16, fontSize: 15, letterSpacing: 1, fontWeight: 600 }}>📷 Apuntá al código QR de la etiqueta</div>
-      {error ? (
-        <div style={{ color: "#FF8C00", background: "rgba(255,140,0,0.12)", padding: "16px 24px", borderRadius: 12, maxWidth: 300, textAlign: "center", fontSize: 14, border: "1px solid rgba(255,140,0,0.3)" }}>{error}</div>
-      ) : (
-        <div style={{ position: "relative", width: 280, height: 280, borderRadius: 16, overflow: "hidden" }}>
-          <video ref={videoRef} style={{ width: "100%", height: "100%", objectFit: "cover" }} muted playsInline />
-          {scanning && <div style={{ position: "absolute", left: 0, right: 0, height: 2, background: "linear-gradient(90deg,transparent,#e8c07d,transparent)", animation: "scan 2s linear infinite" }} />}
-        </div>
-      )}
-      <button onClick={onClose} style={{ marginTop: 28, background: "rgba(255,255,255,0.13)", color: "#fff", border: "none", padding: "12px 32px", borderRadius: 30, fontSize: 15, cursor: "pointer" }}>Cancelar</button>
-      <style>{`@keyframes scan { 0%{top:10px} 50%{top:260px} 100%{top:10px} }`}</style>
-    </div>
-  );
-}
 
 function ImagenVisor({ src, onClose }) {
   return (
@@ -97,7 +48,6 @@ export default function App() {
   const [vista, setVista] = useState("lista");
   const [filtroEstado, setFiltroEstado] = useState("todos");
   const [editando, setEditando] = useState(null);
-  const [showScanner, setShowScanner] = useState(false);
   const [imagenVista, setImagenVista] = useState(null);
   const [notif, setNotif] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -123,13 +73,6 @@ export default function App() {
 
   const mostrarNotif = (msg, tipo = "ok") => { setNotif({ msg, tipo }); setTimeout(() => setNotif(null), 3000); };
 
-  const handleQRScan = (raw) => {
-    setShowScanner(false);
-    const partes = raw.split("|");
-    setForm(f => ({ ...f, producto: partes[0]?.trim() || raw.trim(), precio: partes[1]?.trim() || f.precio }));
-    setVista("nuevo");
-    mostrarNotif("✅ Producto cargado desde QR");
-  };
 
   const handleFoto = (e) => {
     const file = e.target.files[0];
@@ -241,7 +184,6 @@ export default function App() {
         </div>
       )}
 
-      {showScanner && <QRScanner onScan={handleQRScan} onClose={() => setShowScanner(false)} />}
       {imagenVista && <ImagenVisor src={imagenVista} onClose={() => setImagenVista(null)} />}
 
       <div style={{ maxWidth: 720, margin: "0 auto", padding: "20px 16px" }}>
@@ -277,9 +219,6 @@ export default function App() {
               <button className="ba" onClick={() => setVista("nuevo")} style={{ padding: "10px 18px", borderRadius: 10, fontWeight: 600, fontSize: 14, background: vista === "nuevo" ? "#e8c07d" : "#fff", color: vista === "nuevo" ? "#1a1a2e" : "#444", boxShadow: "0 2px 8px rgba(0,0,0,.07)" }}>
                 ✏️ Cargar manualmente
               </button>
-              <button className="ba" onClick={() => setShowScanner(true)} style={{ padding: "10px 18px", borderRadius: 10, fontWeight: 600, fontSize: 14, background: "#1a1a2e", color: "#e8c07d", boxShadow: "0 2px 8px rgba(0,0,0,.07)" }}>
-                📷 Escanear QR
-              </button>
             </>
           )}
         </div>
@@ -292,7 +231,6 @@ export default function App() {
                 <label style={{ fontSize: 13, color: "#555", fontWeight: 600, display: "block", marginBottom: 6 }}>Producto / Tela *</label>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input value={form.producto} onChange={e => setForm({ ...form, producto: e.target.value })} placeholder="Ej: Tela lino beige 150cm" {...inp()} style={{ ...inp().style, flex: 1 }} onFocus={inp().onFocus} onBlur={inp().onBlur} />
-                  <button className="ba" onClick={() => setShowScanner(true)} title="Escanear QR" style={{ padding: "0 16px", borderRadius: 10, background: "#1a1a2e", color: "#e8c07d", fontSize: 20, flexShrink: 0 }}>📷</button>
                 </div>
               </div>
               {form.precio && <div style={{ background: "#F0FFF6", border: "1.5px solid #22AA66", borderRadius: 8, padding: "8px 14px", fontSize: 14, color: "#22AA66", fontWeight: 600 }}>💰 Precio del QR: {form.precio}</div>}
