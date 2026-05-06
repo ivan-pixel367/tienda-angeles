@@ -47,7 +47,7 @@ export default function App() {
   const [rol, setRol] = useState(localStorage.getItem('tienda_rol') || null);
   const [faltantes, setFaltantes] = useState([]);
   const [vista, setVista] = useState("lista");
-  const [filtroEstado, setFiltroEstado] = useState("todos");
+  const [filtroEstado, setFiltroEstado] = useState("pendiente");
   const [editando, setEditando] = useState(null);
   const [imagenVista, setImagenVista] = useState(null);
   const [notif, setNotif] = useState(null);
