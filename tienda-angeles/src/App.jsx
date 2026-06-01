@@ -55,8 +55,8 @@ export default function App() {
     producto: "", precio: "", descripcion: "", cantidad: "",
     urgencia: "media", vendedor: "", tieneSeña: false, comprobante: null, comprobanteNombre: "",
   });
-  const fotoEtiquetaRef = React.useRef(null);
-  const [fotoEtiqueta, setFotoEtiqueta] = React.useState(null);
+  const fotoEtiquetaRef = useRef(null);
+  const [fotoEtiqueta, setFotoEtiqueta] = useState(null);
   const [formCompras, setFormCompras] = useState({ fecha_llegada: "", nota_compras: "", estado: "" });
 
   // ── Cargar faltantes desde Firebase en tiempo real ──
