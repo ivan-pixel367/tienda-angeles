@@ -1,5 +1,4 @@
-im
-            {f.fotoEtiqueta && <img src={f.fotoEtiqueta} alt="Etiqueta" onClick={() => setImagenVista(f.fotoEtiqueta)} style={{ maxWidth: "100%", maxHeight: 120, borderRadius: 8, marginTop: 8, cursor: "zoom-in", border: "2px solid #e8c07d" }} />}port { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, query, orderBy } from "firebase/firestore";
 
@@ -53,11 +52,11 @@ export default function App() {
   const [notif, setNotif] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [form, setForm] = useState({
-  const fotoEtiquetaRef = React.useRef(null);
-  const [fotoEtiqueta, setFotoEtiqueta] = React.useState(null);
     producto: "", precio: "", descripcion: "", cantidad: "",
     urgencia: "media", vendedor: "", tieneSeña: false, comprobante: null, comprobanteNombre: "",
   });
+  const fotoEtiquetaRef = React.useRef(null);
+  const [fotoEtiqueta, setFotoEtiqueta] = React.useState(null);
   const [formCompras, setFormCompras] = useState({ fecha_llegada: "", nota_compras: "", estado: "" });
 
   // ── Cargar faltantes desde Firebase en tiempo real ──
@@ -351,6 +350,7 @@ export default function App() {
                           💬 <b>Compras:</b> {f.nota_compras}
                         </div>
                       )}
+                      {f.fotoEtiqueta && <img src={f.fotoEtiqueta} alt="Etiqueta" onClick={() => setImagenVista(f.fotoEtiqueta)} style={{ maxWidth: "100%", maxHeight: 120, borderRadius: 8, marginTop: 8, cursor: "zoom-in", border: "2px solid #e8c07d" }} />}
                       {f.tieneSeña && f.comprobante && (
                         <div style={{ marginTop: 12 }}>
                           <div style={{ fontSize: 11, color: "#888", marginBottom: 5, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>📄 Factura / Comprobante de seña</div>
