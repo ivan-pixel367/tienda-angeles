@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, query, orderBy } from "firebase/firestore";
+import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBynNS9k20lVkP-LBqK-Wh7h_p0rJQ2xiE",
@@ -123,6 +123,18 @@ export default function App() {
       mostrarNotif("Estado actualizado");
     } catch (e) {
       mostrarNotif("Error al actualizar", "err");
+      console.error(e);
+    }
+  };
+
+  const eliminarFaltante = async (id) => {
+    if (!window.confirm("¿Eliminar este faltante? Esta acción no se puede deshacer.")) return;
+    try {
+      await deleteDoc(doc(db, "faltantes", id));
+      setEditando(null);
+      mostrarNotif("Faltante eliminado");
+    } catch (e) {
+      mostrarNotif("Error al eliminar", "err");
       console.error(e);
     }
   };
@@ -387,6 +399,9 @@ export default function App() {
                       </div>
                       <button className="ba" onClick={() => actualizarFaltante(f.id)} style={{ background: "linear-gradient(135deg,#4a9eff,#2176d4)", color: "#fff", padding: 12, borderRadius: 10, fontWeight: 700, fontSize: 15 }}>
                         Guardar cambios
+                      </button>
+                      <button className="ba" onClick={() => eliminarFaltante(f.id)} style={{ background: "linear-gradient(135deg,#ff6b6b,#d63031)", color: "#fff", padding: 12, borderRadius: 10, fontWeight: 700, fontSize: 15 }}>
+                        🗑️ Eliminar faltante
                       </button>
                     </div>
                   )}
