@@ -73,6 +73,20 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // ── Botón "atrás": navegar entre filtros en vez de cerrar la app ──
+  const irAFiltro = (f) => {
+    setFiltroEstado(f);
+    window.history.pushState({ filtro: f }, "");
+  };
+  useEffect(() => {
+    window.history.replaceState({ filtro: "pendiente" }, "");
+    const onPop = (e) => {
+      setFiltroEstado(e.state && e.state.filtro ? e.state.filtro : "pendiente");
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
   const mostrarNotif = (msg, tipo = "ok") => { setNotif({ msg, tipo }); setTimeout(() => setNotif(null), 3000); };
 
 
@@ -325,7 +339,7 @@ export default function App() {
           <>
             <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
               {[["todos","Todos"],["pendiente","Pendientes"],["en_proceso","En proceso"],["comprado","Comprado"],["recibido","Recibidos"],["sin_stock","No hay en stock"]].map(([val, label]) => (
-                <button key={val} className="ba" onClick={() => setFiltroEstado(val)} style={{ padding: "7px 14px", borderRadius: 20, fontSize: 13, fontWeight: 600, background: filtroEstado === val ? "#1a1a2e" : "#fff", color: filtroEstado === val ? "#fff" : "#666", boxShadow: "0 1px 6px rgba(0,0,0,.07)" }}>
+                <button key={val} className="ba" onClick={() => irAFiltro(val)} style={{ padding: "7px 14px", borderRadius: 20, fontSize: 13, fontWeight: 600, background: filtroEstado === val ? "#1a1a2e" : "#fff", color: filtroEstado === val ? "#fff" : "#666", boxShadow: "0 1px 6px rgba(0,0,0,.07)" }}>
                   {label}
                 </button>
               ))}
