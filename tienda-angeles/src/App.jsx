@@ -90,22 +90,46 @@ export default function App() {
   const mostrarNotif = (msg, tipo = "ok") => { setNotif({ msg, tipo }); setTimeout(() => setNotif(null), 3000); };
 
 
-  const handleFoto = (e) => {
+  // Comprime y achica la imagen para que entre en Firebase (límite ~1MB por documento)
+  const comprimirImagen = (file, maxLado = 1000, calidad = 0.6) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          let w = img.width, h = img.height;
+          if (w > h && w > maxLado) { h = Math.round(h * maxLado / w); w = maxLado; }
+          else if (h > maxLado) { w = Math.round(w * maxLado / h); h = maxLado; }
+          const canvas = document.createElement("canvas");
+          canvas.width = w; canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/jpeg", calidad));
+        };
+        img.onerror = reject;
+        img.src = ev.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const handleFoto = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 8 * 1024 * 1024) { mostrarNotif("La imagen no puede superar 8MB", "err"); return; }
-    const reader = new FileReader();
-    reader.onload = (ev) => setForm(f => ({ ...f, comprobante: ev.target.result, comprobanteNombre: file.name }));
-    reader.readAsDataURL(file);
+    if (file.size > 12 * 1024 * 1024) { mostrarNotif("La imagen no puede superar 12MB", "err"); return; }
+    try {
+      const comprimida = await comprimirImagen(file);
+      setForm(f => ({ ...f, comprobante: comprimida, comprobanteNombre: file.name }));
+    } catch (err) { console.error(err); mostrarNotif("No se pudo procesar la imagen", "err"); }
   };
 
-  const handleFotoEtiqueta = (e) => {
+  const handleFotoEtiqueta = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 8 * 1024 * 1024) { mostrarNotif("La imagen no puede superar 8MB", "err"); return; }
-    const reader = new FileReader();
-    reader.onload = (ev) => setFotoEtiqueta(ev.target.result);
-    reader.readAsDataURL(file);
+    if (file.size > 12 * 1024 * 1024) { mostrarNotif("La imagen no puede superar 12MB", "err"); return; }
+    try {
+      const comprimida = await comprimirImagen(file);
+      setFotoEtiqueta(comprimida);
+    } catch (err) { console.error(err); mostrarNotif("No se pudo procesar la imagen", "err"); }
   };
 
   const enviarFaltante = async () => {
