@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, query, orderBy } from "firebase/firestore";
 
@@ -32,6 +32,34 @@ const ESTADO_CONFIG = {
 };
 
 
+// Comprime y achica la imagen para que entre en Firebase (límite ~1MB por documento)
+const comprimirImagen = (file, maxLado = 1000, calidad = 0.6) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > h && w > maxLado) { h = Math.round(h * maxLado / w); w = maxLado; }
+        else if (h > maxLado) { w = Math.round(w * maxLado / h); h = maxLado; }
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", calidad));
+      };
+      img.onerror = reject;
+      img.src = ev.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+const inp = (extra = {}) => ({
+  style: { width: "100%", padding: "12px 14px", borderRadius: 10, border: "2px solid #E8E4DF", fontSize: 15, outline: "none", fontFamily: "inherit", ...extra },
+  onFocus: e => e.target.style.borderColor = "#c9943c",
+  onBlur: e => e.target.style.borderColor = "#E8E4DF",
+});
+
 function ImagenVisor({ src, onClose }) {
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.93)", zIndex: 1000, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "zoom-out" }}>
@@ -41,76 +69,15 @@ function ImagenVisor({ src, onClose }) {
   );
 }
 
-// ── App ─────────────────────────────────────────────────────────
-export default function App() {
-  const [rol, setRol] = useState(localStorage.getItem('tienda_rol') || null);
-  const [faltantes, setFaltantes] = useState([]);
-  const [vista, setVista] = useState("lista");
-  const [filtroEstado, setFiltroEstado] = useState("pendiente");
-  const [editando, setEditando] = useState(null);
-  const [imagenVista, setImagenVista] = useState(null);
-  const [notif, setNotif] = useState(null);
-  const [cargando, setCargando] = useState(true);
+// ── Formulario "Reportar faltante" (estado local: tipear acá no re-renderiza la lista) ──
+const ReportarForm = memo(function ReportarForm({ mostrarNotif, onSubmitted }) {
   const [form, setForm] = useState({
     producto: "", precio: "", descripcion: "", cantidad: "",
     urgencia: "media", vendedor: "", tieneSeña: false, comprobante: null, comprobanteNombre: "",
   });
-  const fotoEtiquetaRef = useRef(null);
   const [fotoEtiqueta, setFotoEtiqueta] = useState(null);
-  const [formCompras, setFormCompras] = useState({ fecha_llegada: "", nota_compras: "", estado: "" });
-
-  // ── Cargar faltantes desde Firebase en tiempo real ──
-  useEffect(() => {
-    const q = query(collection(db, "faltantes"), orderBy("fecha_reporte", "desc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const datos = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      setFaltantes(datos);
-      setCargando(false);
-    }, (error) => {
-      console.error("Error cargando faltantes:", error);
-      setCargando(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // ── Botón "atrás": navegar entre filtros en vez de cerrar la app ──
-  const irAFiltro = (f) => {
-    setFiltroEstado(f);
-    window.history.pushState({ filtro: f }, "");
-  };
-  useEffect(() => {
-    window.history.replaceState({ filtro: "pendiente" }, "");
-    const onPop = (e) => {
-      setFiltroEstado(e.state && e.state.filtro ? e.state.filtro : "pendiente");
-    };
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
-
-  const mostrarNotif = (msg, tipo = "ok") => { setNotif({ msg, tipo }); setTimeout(() => setNotif(null), 3000); };
-
-
-  // Comprime y achica la imagen para que entre en Firebase (límite ~1MB por documento)
-  const comprimirImagen = (file, maxLado = 1000, calidad = 0.6) =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const img = new Image();
-        img.onload = () => {
-          let w = img.width, h = img.height;
-          if (w > h && w > maxLado) { h = Math.round(h * maxLado / w); w = maxLado; }
-          else if (h > maxLado) { w = Math.round(w * maxLado / h); h = maxLado; }
-          const canvas = document.createElement("canvas");
-          canvas.width = w; canvas.height = h;
-          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-          resolve(canvas.toDataURL("image/jpeg", calidad));
-        };
-        img.onerror = reject;
-        img.src = ev.target.result;
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+  const [imagenVista, setImagenVista] = useState(null);
+  const fotoEtiquetaRef = useRef(null);
 
   const handleFoto = async (e) => {
     const file = e.target.files[0];
@@ -144,20 +111,104 @@ export default function App() {
         nota_compras: "",
         timestamp: Date.now(),
       });
-      setForm({ producto: "", precio: "", descripcion: "", cantidad: "", urgencia: "media", vendedor: "", tieneSeña: false, comprobante: null, comprobanteNombre: "" });
-      setVista("lista");
       mostrarNotif("¡Faltante reportado!");
-      setFotoEtiqueta(null);
+      onSubmitted();
     } catch (e) {
       mostrarNotif("Error al guardar. Revisá la conexión.", "err");
       console.error(e);
     }
   };
 
-  const actualizarFaltante = async (id) => {
+  return (
+    <div style={{ background: "#fff", borderRadius: 18, padding: 22, boxShadow: "0 2px 20px rgba(0,0,0,.08)", marginBottom: 24 }}>
+      {imagenVista && <ImagenVisor src={imagenVista} onClose={() => setImagenVista(null)} />}
+      <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: 21, marginBottom: 20, color: "#1a1a2e" }}>Reportar producto faltante</h2>
+      <div style={{ display: "grid", gap: 14 }}>
+        <div>
+          <label style={{ fontSize: 13, color: "#555", fontWeight: 600, display: "block", marginBottom: 6 }}>Producto / Tela *</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input value={form.producto} onChange={e => setForm({ ...form, producto: e.target.value })} placeholder="Ej: Tela lino beige 150cm" {...inp()} style={{ ...inp().style, flex: 1 }} onFocus={inp().onFocus} onBlur={inp().onBlur} />
+            <input ref={fotoEtiquetaRef} type="file" accept="image/*" capture="environment" onChange={handleFotoEtiqueta} style={{ display: "none" }} />
+            <button type="button" onClick={() => fotoEtiquetaRef.current && fotoEtiquetaRef.current.click()} title="Sacar foto a la etiqueta" style={{ padding: "0 14px", borderRadius: 10, border: "2px solid #e8c07d", background: fotoEtiqueta ? "#e8c07d" : "#fff", cursor: "pointer", fontSize: 20, flexShrink: 0 }}>📷</button>
+          </div>
+          {fotoEtiqueta && (
+            <div style={{ marginTop: 8, position: "relative", display: "inline-block" }}>
+              <img src={fotoEtiqueta} alt="Etiqueta" style={{ maxWidth: "100%", maxHeight: 160, borderRadius: 8, border: "2px solid #e8c07d" }} />
+              <button type="button" onClick={() => setFotoEtiqueta(null)} style={{ position: "absolute", top: 4, right: 4, background: "#cc0000", color: "#fff", border: "none", borderRadius: "50%", width: 22, height: 22, cursor: "pointer", fontSize: 13, lineHeight: "22px", textAlign: "center" }}>×</button>
+            </div>
+          )}
+        </div>
+        {form.precio && <div style={{ background: "#F0FFF6", border: "1.5px solid #22AA66", borderRadius: 8, padding: "8px 14px", fontSize: 14, color: "#22AA66", fontWeight: 600 }}>💰 Precio del QR: {form.precio}</div>}
+        <div>
+          <label style={{ fontSize: 13, color: "#555", fontWeight: 600, display: "block", marginBottom: 6 }}>Tu nombre *</label>
+          <input value={form.vendedor} onChange={e => setForm({ ...form, vendedor: e.target.value })} placeholder="Ej: María González" {...inp()} />
+        </div>
+        <div>
+          <label style={{ fontSize: 13, color: "#555", fontWeight: 600, display: "block", marginBottom: 6 }}>Cantidad a pedir *</label>
+          <input value={form.cantidad} onChange={e => setForm({ ...form, cantidad: e.target.value })} placeholder="Ej: 5 rollos, 20 metros..." {...inp()} />
+        </div>
+        <div>
+          <label style={{ fontSize: 13, color: "#555", fontWeight: 600, display: "block", marginBottom: 6 }}>Urgencia</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            {Object.entries(URGENCIA_CONFIG).map(([key, cfg]) => (
+              <button key={key} className="ba" onClick={() => setForm({ ...form, urgencia: key })} style={{ flex: 1, padding: "10px 0", borderRadius: 10, fontWeight: 600, fontSize: 13, background: form.urgencia === key ? cfg.bg : "#F7F5F2", color: form.urgencia === key ? cfg.color : "#888", border: `2px solid ${form.urgencia === key ? cfg.color : "transparent"}` }}>{cfg.label}</button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label style={{ fontSize: 13, color: "#555", fontWeight: 600, display: "block", marginBottom: 6 }}>Observación</label>
+          <textarea value={form.descripcion} onChange={e => setForm({ ...form, descripcion: e.target.value })} placeholder="Color específico, detalle, etc." rows={2} {...inp({ resize: "none" })} />
+        </div>
+        <div style={{ borderTop: "2px dashed #E8E4DF", paddingTop: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }} onClick={() => setForm(f => ({ ...f, tieneSeña: !f.tieneSeña, comprobante: null, comprobanteNombre: "" }))}>
+            <div style={{ width: 46, height: 26, borderRadius: 13, background: form.tieneSeña ? "#c9943c" : "#ddd", position: "relative", transition: "background .2s", flexShrink: 0 }}>
+              <div style={{ position: "absolute", top: 3, left: form.tieneSeña ? 22 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .2s", boxShadow: "0 1px 4px rgba(0,0,0,.25)" }} />
+            </div>
+            <span style={{ fontWeight: 700, fontSize: 15, color: "#333", userSelect: "none" }}>🧾 El cliente dejó una seña</span>
+          </div>
+          {form.tieneSeña && (
+            <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
+              <div style={{ background: "#FFF8F0", border: "1.5px solid #FF8C00", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#AA5500" }}>⚠️ Adjuntá la foto de la <b>factura del ERP</b> como comprobante.</div>
+              {!form.comprobante ? (
+                <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "20px 14px", borderRadius: 12, border: "2px dashed #c9943c", cursor: "pointer", background: "#FFFBF5", color: "#c9943c", fontWeight: 600, fontSize: 14, textAlign: "center" }}>
+                  <span style={{ fontSize: 32 }}>📸</span> Tocá para sacar foto o elegir de galería
+                  <span style={{ fontSize: 12, color: "#aaa", fontWeight: 400 }}>Factura del ERP</span>
+                  <input type="file" accept="image/*" capture="environment" onChange={handleFoto} style={{ display: "none" }} />
+                </label>
+              ) : (
+                <div style={{ position: "relative" }}>
+                  <img src={form.comprobante} alt="Factura" onClick={() => setImagenVista(form.comprobante)} style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 10, cursor: "zoom-in", border: "2px solid #22AA66", display: "block" }} />
+                  <div style={{ position: "absolute", top: 8, right: 8, display: "flex", gap: 6 }}>
+                    <span style={{ background: "#22AA66", color: "#fff", padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700 }}>✓ Adjunta</span>
+                    <button className="ba" onClick={e => { e.stopPropagation(); setForm(f => ({ ...f, comprobante: null, comprobanteNombre: "" })); }} style={{ background: "#FF4444", color: "#fff", borderRadius: 20, padding: "4px 10px", fontSize: 12, fontWeight: 700 }}>✕</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <button className="ba" onClick={enviarFaltante} style={{ background: "linear-gradient(135deg,#e8c07d,#c9943c)", color: "#1a1a2e", padding: 14, borderRadius: 12, fontWeight: 700, fontSize: 16, fontFamily: "'Playfair Display',serif" }}>
+          Enviar aviso de faltante
+        </button>
+      </div>
+    </div>
+  );
+});
+
+// ── Tarjeta de faltante (estado de edición local: no re-renderiza la lista completa) ──
+const FaltanteCard = memo(function FaltanteCard({ f, esCompras, onImageClick, mostrarNotif }) {
+  const [editando, setEditando] = useState(false);
+  const [formCompras, setFormCompras] = useState({ fecha_llegada: f.fecha_llegada || "", nota_compras: f.nota_compras || "", estado: f.estado });
+
+  const abrirEdicion = () => {
+    setFormCompras({ fecha_llegada: f.fecha_llegada || "", nota_compras: f.nota_compras || "", estado: f.estado });
+    setEditando(true);
+  };
+
+  const actualizarFaltante = async () => {
     try {
-      await updateDoc(doc(db, "faltantes", id), formCompras);
-      setEditando(null);
+      await updateDoc(doc(db, "faltantes", f.id), formCompras);
+      setEditando(false);
       mostrarNotif("Estado actualizado");
     } catch (e) {
       mostrarNotif("Error al actualizar", "err");
@@ -165,11 +216,11 @@ export default function App() {
     }
   };
 
-  const eliminarFaltante = async (id) => {
+  const eliminarFaltante = async () => {
     if (!window.confirm("¿Eliminar este faltante? Esta acción no se puede deshacer.")) return;
     try {
-      await deleteDoc(doc(db, "faltantes", id));
-      setEditando(null);
+      await deleteDoc(doc(db, "faltantes", f.id));
+      setEditando(false);
       mostrarNotif("Faltante eliminado");
     } catch (e) {
       mostrarNotif("Error al eliminar", "err");
@@ -177,10 +228,118 @@ export default function App() {
     }
   };
 
-  const abrirEdicion = (f) => {
-    setEditando(f.id);
-    setFormCompras({ fecha_llegada: f.fecha_llegada || "", nota_compras: f.nota_compras || "", estado: f.estado });
+  const urg = URGENCIA_CONFIG[f.urgencia];
+  const est = ESTADO_CONFIG[f.estado];
+
+  return (
+    <div className="card" style={{ background: "#fff", borderRadius: 16, padding: 18, marginBottom: 14, boxShadow: "0 2px 12px rgba(0,0,0,.06)", borderLeft: `4px solid ${urg?.color || "#ccc"}` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6, flexWrap: "wrap" }}>
+            <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, color: "#1a1a2e", margin: 0 }}>{f.producto}</h3>
+            {urg && <span style={{ background: urg.bg, color: urg.color, padding: "2px 9px", borderRadius: 20, fontSize: 11, fontWeight: 700 }}>{urg.label}</span>}
+            {est && <span style={{ background: est.bg, color: est.color, padding: "2px 9px", borderRadius: 20, fontSize: 11, fontWeight: 700 }}>{est.label}</span>}
+            {f.tieneSeña && <span style={{ background: "#FFF8F0", color: "#c9943c", padding: "2px 9px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid #e8c07d" }}>🧾 Con seña</span>}
+          </div>
+          {f.descripcion && <p style={{ color: "#666", fontSize: 13, margin: "0 0 8px" }}>{f.descripcion}</p>}
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 13, color: "#888" }}>📦 <b style={{ color: "#444" }}>{f.cantidad}</b></span>
+            <span style={{ fontSize: 13, color: "#888" }}>👤 <b style={{ color: "#444" }}>{f.vendedor}</b></span>
+            <span style={{ fontSize: 13, color: "#888" }}>📅 {f.fecha_reporte}</span>
+            {f.precio && <span style={{ fontSize: 13, color: "#888" }}>💰 <b style={{ color: "#444" }}>{f.precio}</b></span>}
+            {f.fecha_llegada && <span style={{ fontSize: 13, color: "#22AA66" }}>🚚 Llega: <b>{f.fecha_llegada}</b></span>}
+          </div>
+          {f.nota_compras && (
+            <div style={{ marginTop: 10, background: "#EDF4FF", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#1A6FD4" }}>
+              💬 <b>Compras:</b> {f.nota_compras}
+            </div>
+          )}
+          {f.fotoEtiqueta && <img src={f.fotoEtiqueta} alt="Etiqueta" onClick={() => onImageClick(f.fotoEtiqueta)} style={{ maxWidth: "100%", maxHeight: 120, borderRadius: 8, marginTop: 8, cursor: "zoom-in", border: "2px solid #e8c07d" }} />}
+          {f.tieneSeña && f.comprobante && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 11, color: "#888", marginBottom: 5, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>📄 Factura / Comprobante de seña</div>
+              <img src={f.comprobante} alt="Comprobante" onClick={() => onImageClick(f.comprobante)} style={{ width: "100%", maxHeight: 160, objectFit: "cover", borderRadius: 8, cursor: "zoom-in", border: "2px solid #e8c07d", display: "block" }} />
+            </div>
+          )}
+        </div>
+        {esCompras && (
+          <button className="ba" onClick={() => editando ? setEditando(false) : abrirEdicion()} style={{ background: editando ? "#F7F5F2" : "#1a1a2e", color: editando ? "#444" : "#fff", padding: "8px 14px", borderRadius: 10, fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", flexShrink: 0 }}>
+            {editando ? "Cancelar" : "✏️ Gestionar"}
+          </button>
+        )}
+      </div>
+      {esCompras && editando && (
+        <div style={{ marginTop: 16, paddingTop: 16, borderTop: "2px dashed #E8E4DF", display: "grid", gap: 12 }}>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Estado del pedido</label>
+            <select value={formCompras.estado} onChange={e => setFormCompras({ ...formCompras, estado: e.target.value })} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "2px solid #E8E4DF", fontSize: 15, background: "#fff" }}>
+              <option value="pendiente">⏳ Pendiente</option>
+              <option value="en_proceso">🔄 En proceso</option>
+              <option value="comprado">✅ Comprado</option>
+              <option value="recibido">📬 Recibido</option>
+
+              <option value="sin_stock">❌ No hay en stock</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Fecha estimada de llegada</label>
+            <input type="date" value={formCompras.fecha_llegada} onChange={e => setFormCompras({ ...formCompras, fecha_llegada: e.target.value })} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "2px solid #E8E4DF", fontSize: 15 }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 13, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Nota para el equipo</label>
+            <textarea value={formCompras.nota_compras} onChange={e => setFormCompras({ ...formCompras, nota_compras: e.target.value })} placeholder="Ej: Pedido a Textil Norte, llega el jueves..." rows={2} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "2px solid #E8E4DF", fontSize: 14, resize: "none" }} />
+          </div>
+          <button className="ba" onClick={actualizarFaltante} style={{ background: "linear-gradient(135deg,#4a9eff,#2176d4)", color: "#fff", padding: 12, borderRadius: 10, fontWeight: 700, fontSize: 15 }}>
+            Guardar cambios
+          </button>
+          <button className="ba" onClick={eliminarFaltante} style={{ background: "linear-gradient(135deg,#ff6b6b,#d63031)", color: "#fff", padding: 12, borderRadius: 10, fontWeight: 700, fontSize: 15 }}>
+            🗑️ Eliminar faltante
+          </button>
+        </div>
+      )}
+    </div>
+  );
+});
+
+// ── App ─────────────────────────────────────────────────────────
+export default function App() {
+  const [rol, setRol] = useState(localStorage.getItem('tienda_rol') || null);
+  const [faltantes, setFaltantes] = useState([]);
+  const [vista, setVista] = useState("lista");
+  const [filtroEstado, setFiltroEstado] = useState("pendiente");
+  const [imagenVista, setImagenVista] = useState(null);
+  const [notif, setNotif] = useState(null);
+  const [cargando, setCargando] = useState(true);
+
+  // ── Cargar faltantes desde Firebase en tiempo real ──
+  useEffect(() => {
+    const q = query(collection(db, "faltantes"), orderBy("fecha_reporte", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const datos = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      setFaltantes(datos);
+      setCargando(false);
+    }, (error) => {
+      console.error("Error cargando faltantes:", error);
+      setCargando(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // ── Botón "atrás": navegar entre filtros en vez de cerrar la app ──
+  const irAFiltro = (f) => {
+    setFiltroEstado(f);
+    window.history.pushState({ filtro: f }, "");
   };
+  useEffect(() => {
+    window.history.replaceState({ filtro: "pendiente" }, "");
+    const onPop = (e) => {
+      setFiltroEstado(e.state && e.state.filtro ? e.state.filtro : "pendiente");
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  const mostrarNotif = useCallback((msg, tipo = "ok") => { setNotif({ msg, tipo }); setTimeout(() => setNotif(null), 3000); }, []);
 
   const filtrados = faltantes.filter(f => filtroEstado === "todos" ? true : f.estado === filtroEstado);
   const counts = {
@@ -189,12 +348,6 @@ export default function App() {
     comprado: faltantes.filter(f => f.estado === "comprado").length,
   };
   const esCompras = rol === ROLES.COMPRAS;
-
-  const inp = (extra = {}) => ({
-    style: { width: "100%", padding: "12px 14px", borderRadius: 10, border: "2px solid #E8E4DF", fontSize: 15, outline: "none", fontFamily: "inherit", ...extra },
-    onFocus: e => e.target.style.borderColor = "#c9943c",
-    onBlur: e => e.target.style.borderColor = "#E8E4DF",
-  });
 
   if (!rol) return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
@@ -286,77 +439,7 @@ export default function App() {
         </div>
 
         {vista === "nuevo" && !esCompras && (
-          <div style={{ background: "#fff", borderRadius: 18, padding: 22, boxShadow: "0 2px 20px rgba(0,0,0,.08)", marginBottom: 24 }}>
-            <h2 style={{ fontFamily: "'Playfair Display',serif", fontSize: 21, marginBottom: 20, color: "#1a1a2e" }}>Reportar producto faltante</h2>
-            <div style={{ display: "grid", gap: 14 }}>
-              <div>
-                <label style={{ fontSize: 13, color: "#555", fontWeight: 600, display: "block", marginBottom: 6 }}>Producto / Tela *</label>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input value={form.producto} onChange={e => setForm({ ...form, producto: e.target.value })} placeholder="Ej: Tela lino beige 150cm" {...inp()} style={{ ...inp().style, flex: 1 }} onFocus={inp().onFocus} onBlur={inp().onBlur} />
-                  <input ref={fotoEtiquetaRef} type="file" accept="image/*" capture="environment" onChange={handleFotoEtiqueta} style={{ display: "none" }} />
-                  <button type="button" onClick={() => fotoEtiquetaRef.current && fotoEtiquetaRef.current.click()} title="Sacar foto a la etiqueta" style={{ padding: "0 14px", borderRadius: 10, border: "2px solid #e8c07d", background: fotoEtiqueta ? "#e8c07d" : "#fff", cursor: "pointer", fontSize: 20, flexShrink: 0 }}>📷</button>
-                </div>
-                {fotoEtiqueta && (
-                  <div style={{ marginTop: 8, position: "relative", display: "inline-block" }}>
-                    <img src={fotoEtiqueta} alt="Etiqueta" style={{ maxWidth: "100%", maxHeight: 160, borderRadius: 8, border: "2px solid #e8c07d" }} />
-                    <button type="button" onClick={() => setFotoEtiqueta(null)} style={{ position: "absolute", top: 4, right: 4, background: "#cc0000", color: "#fff", border: "none", borderRadius: "50%", width: 22, height: 22, cursor: "pointer", fontSize: 13, lineHeight: "22px", textAlign: "center" }}>×</button>
-                  </div>
-                )}
-              </div>
-              {form.precio && <div style={{ background: "#F0FFF6", border: "1.5px solid #22AA66", borderRadius: 8, padding: "8px 14px", fontSize: 14, color: "#22AA66", fontWeight: 600 }}>💰 Precio del QR: {form.precio}</div>}
-              <div>
-                <label style={{ fontSize: 13, color: "#555", fontWeight: 600, display: "block", marginBottom: 6 }}>Tu nombre *</label>
-                <input value={form.vendedor} onChange={e => setForm({ ...form, vendedor: e.target.value })} placeholder="Ej: María González" {...inp()} />
-              </div>
-              <div>
-                <label style={{ fontSize: 13, color: "#555", fontWeight: 600, display: "block", marginBottom: 6 }}>Cantidad a pedir *</label>
-                <input value={form.cantidad} onChange={e => setForm({ ...form, cantidad: e.target.value })} placeholder="Ej: 5 rollos, 20 metros..." {...inp()} />
-              </div>
-              <div>
-                <label style={{ fontSize: 13, color: "#555", fontWeight: 600, display: "block", marginBottom: 6 }}>Urgencia</label>
-                <div style={{ display: "flex", gap: 8 }}>
-                  {Object.entries(URGENCIA_CONFIG).map(([key, cfg]) => (
-                    <button key={key} className="ba" onClick={() => setForm({ ...form, urgencia: key })} style={{ flex: 1, padding: "10px 0", borderRadius: 10, fontWeight: 600, fontSize: 13, background: form.urgencia === key ? cfg.bg : "#F7F5F2", color: form.urgencia === key ? cfg.color : "#888", border: `2px solid ${form.urgencia === key ? cfg.color : "transparent"}` }}>{cfg.label}</button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label style={{ fontSize: 13, color: "#555", fontWeight: 600, display: "block", marginBottom: 6 }}>Observación</label>
-                <textarea value={form.descripcion} onChange={e => setForm({ ...form, descripcion: e.target.value })} placeholder="Color específico, detalle, etc." rows={2} {...inp({ resize: "none" })} />
-              </div>
-              <div style={{ borderTop: "2px dashed #E8E4DF", paddingTop: 16 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }} onClick={() => setForm(f => ({ ...f, tieneSeña: !f.tieneSeña, comprobante: null, comprobanteNombre: "" }))}>
-                  <div style={{ width: 46, height: 26, borderRadius: 13, background: form.tieneSeña ? "#c9943c" : "#ddd", position: "relative", transition: "background .2s", flexShrink: 0 }}>
-                    <div style={{ position: "absolute", top: 3, left: form.tieneSeña ? 22 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left .2s", boxShadow: "0 1px 4px rgba(0,0,0,.25)" }} />
-                  </div>
-                  <span style={{ fontWeight: 700, fontSize: 15, color: "#333", userSelect: "none" }}>🧾 El cliente dejó una seña</span>
-                </div>
-                {form.tieneSeña && (
-                  <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
-                    <div style={{ background: "#FFF8F0", border: "1.5px solid #FF8C00", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#AA5500" }}>⚠️ Adjuntá la foto de la <b>factura del ERP</b> como comprobante.</div>
-                    {!form.comprobante ? (
-                      <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "20px 14px", borderRadius: 12, border: "2px dashed #c9943c", cursor: "pointer", background: "#FFFBF5", color: "#c9943c", fontWeight: 600, fontSize: 14, textAlign: "center" }}>
-                        <span style={{ fontSize: 32 }}>📸</span> Tocá para sacar foto o elegir de galería
-                        <span style={{ fontSize: 12, color: "#aaa", fontWeight: 400 }}>Factura del ERP</span>
-                        <input type="file" accept="image/*" capture="environment" onChange={handleFoto} style={{ display: "none" }} />
-                      </label>
-                    ) : (
-                      <div style={{ position: "relative" }}>
-                        <img src={form.comprobante} alt="Factura" onClick={() => setImagenVista(form.comprobante)} style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 10, cursor: "zoom-in", border: "2px solid #22AA66", display: "block" }} />
-                        <div style={{ position: "absolute", top: 8, right: 8, display: "flex", gap: 6 }}>
-                          <span style={{ background: "#22AA66", color: "#fff", padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700 }}>✓ Adjunta</span>
-                          <button className="ba" onClick={e => { e.stopPropagation(); setForm(f => ({ ...f, comprobante: null, comprobanteNombre: "" })); }} style={{ background: "#FF4444", color: "#fff", borderRadius: 20, padding: "4px 10px", fontSize: 12, fontWeight: 700 }}>✕</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-              <button className="ba" onClick={enviarFaltante} style={{ background: "linear-gradient(135deg,#e8c07d,#c9943c)", color: "#1a1a2e", padding: 14, borderRadius: 12, fontWeight: 700, fontSize: 16, fontFamily: "'Playfair Display',serif" }}>
-                Enviar aviso de faltante
-              </button>
-            </div>
-          </div>
+          <ReportarForm mostrarNotif={mostrarNotif} onSubmitted={() => setVista("lista")} />
         )}
 
         {vista === "lista" && !cargando && (
@@ -374,78 +457,9 @@ export default function App() {
                 <div style={{ fontSize: 16 }}>{faltantes.length === 0 ? "Aún no hay faltantes reportados" : "No hay faltantes en esta categoría"}</div>
               </div>
             )}
-            {filtrados.map(f => {
-              const urg = URGENCIA_CONFIG[f.urgencia];
-              const est = ESTADO_CONFIG[f.estado];
-              return (
-                <div key={f.id} className="card" style={{ background: "#fff", borderRadius: 16, padding: 18, marginBottom: 14, boxShadow: "0 2px 12px rgba(0,0,0,.06)", borderLeft: `4px solid ${urg?.color || "#ccc"}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6, flexWrap: "wrap" }}>
-                        <h3 style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, color: "#1a1a2e", margin: 0 }}>{f.producto}</h3>
-                        {urg && <span style={{ background: urg.bg, color: urg.color, padding: "2px 9px", borderRadius: 20, fontSize: 11, fontWeight: 700 }}>{urg.label}</span>}
-                        {est && <span style={{ background: est.bg, color: est.color, padding: "2px 9px", borderRadius: 20, fontSize: 11, fontWeight: 700 }}>{est.label}</span>}
-                        {f.tieneSeña && <span style={{ background: "#FFF8F0", color: "#c9943c", padding: "2px 9px", borderRadius: 20, fontSize: 11, fontWeight: 700, border: "1px solid #e8c07d" }}>🧾 Con seña</span>}
-                      </div>
-                      {f.descripcion && <p style={{ color: "#666", fontSize: 13, margin: "0 0 8px" }}>{f.descripcion}</p>}
-                      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 13, color: "#888" }}>📦 <b style={{ color: "#444" }}>{f.cantidad}</b></span>
-                        <span style={{ fontSize: 13, color: "#888" }}>👤 <b style={{ color: "#444" }}>{f.vendedor}</b></span>
-                        <span style={{ fontSize: 13, color: "#888" }}>📅 {f.fecha_reporte}</span>
-                        {f.precio && <span style={{ fontSize: 13, color: "#888" }}>💰 <b style={{ color: "#444" }}>{f.precio}</b></span>}
-                        {f.fecha_llegada && <span style={{ fontSize: 13, color: "#22AA66" }}>🚚 Llega: <b>{f.fecha_llegada}</b></span>}
-                      </div>
-                      {f.nota_compras && (
-                        <div style={{ marginTop: 10, background: "#EDF4FF", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#1A6FD4" }}>
-                          💬 <b>Compras:</b> {f.nota_compras}
-                        </div>
-                      )}
-                      {f.fotoEtiqueta && <img src={f.fotoEtiqueta} alt="Etiqueta" onClick={() => setImagenVista(f.fotoEtiqueta)} style={{ maxWidth: "100%", maxHeight: 120, borderRadius: 8, marginTop: 8, cursor: "zoom-in", border: "2px solid #e8c07d" }} />}
-                      {f.tieneSeña && f.comprobante && (
-                        <div style={{ marginTop: 12 }}>
-                          <div style={{ fontSize: 11, color: "#888", marginBottom: 5, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>📄 Factura / Comprobante de seña</div>
-                          <img src={f.comprobante} alt="Comprobante" onClick={() => setImagenVista(f.comprobante)} style={{ width: "100%", maxHeight: 160, objectFit: "cover", borderRadius: 8, cursor: "zoom-in", border: "2px solid #e8c07d", display: "block" }} />
-                        </div>
-                      )}
-                    </div>
-                    {esCompras && (
-                      <button className="ba" onClick={() => editando === f.id ? setEditando(null) : abrirEdicion(f)} style={{ background: editando === f.id ? "#F7F5F2" : "#1a1a2e", color: editando === f.id ? "#444" : "#fff", padding: "8px 14px", borderRadius: 10, fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", flexShrink: 0 }}>
-                        {editando === f.id ? "Cancelar" : "✏️ Gestionar"}
-                      </button>
-                    )}
-                  </div>
-                  {esCompras && editando === f.id && (
-                    <div style={{ marginTop: 16, paddingTop: 16, borderTop: "2px dashed #E8E4DF", display: "grid", gap: 12 }}>
-                      <div>
-                        <label style={{ fontSize: 13, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Estado del pedido</label>
-                        <select value={formCompras.estado} onChange={e => setFormCompras({ ...formCompras, estado: e.target.value })} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "2px solid #E8E4DF", fontSize: 15, background: "#fff" }}>
-                          <option value="pendiente">⏳ Pendiente</option>
-                          <option value="en_proceso">🔄 En proceso</option>
-                          <option value="comprado">✅ Comprado</option>
-                          <option value="recibido">📬 Recibido</option>
-                        
-                          <option value="sin_stock">❌ No hay en stock</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label style={{ fontSize: 13, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Fecha estimada de llegada</label>
-                        <input type="date" value={formCompras.fecha_llegada} onChange={e => setFormCompras({ ...formCompras, fecha_llegada: e.target.value })} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "2px solid #E8E4DF", fontSize: 15 }} />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: 13, fontWeight: 600, color: "#555", display: "block", marginBottom: 6 }}>Nota para el equipo</label>
-                        <textarea value={formCompras.nota_compras} onChange={e => setFormCompras({ ...formCompras, nota_compras: e.target.value })} placeholder="Ej: Pedido a Textil Norte, llega el jueves..." rows={2} style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "2px solid #E8E4DF", fontSize: 14, resize: "none" }} />
-                      </div>
-                      <button className="ba" onClick={() => actualizarFaltante(f.id)} style={{ background: "linear-gradient(135deg,#4a9eff,#2176d4)", color: "#fff", padding: 12, borderRadius: 10, fontWeight: 700, fontSize: 15 }}>
-                        Guardar cambios
-                      </button>
-                      <button className="ba" onClick={() => eliminarFaltante(f.id)} style={{ background: "linear-gradient(135deg,#ff6b6b,#d63031)", color: "#fff", padding: 12, borderRadius: 10, fontWeight: 700, fontSize: 15 }}>
-                        🗑️ Eliminar faltante
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {filtrados.map(f => (
+              <FaltanteCard key={f.id} f={f} esCompras={esCompras} onImageClick={setImagenVista} mostrarNotif={mostrarNotif} />
+            ))}
           </>
         )}
       </div>
